@@ -90,7 +90,7 @@ In your Supabase **SQL Editor**, run in order:
 1. `db/schema.sql` — creates the six tables and indexes
 2. `db/views.sql` — creates the five KPI views
 
-> **Tip**: If you have the [Supabase MCP server](https://supabase.com/docs/guides/getting-started/mcp) configured, you can apply these as migrations directly from your editor without touching the Supabase UI.
+
 
 ### 4. Run the Streamlit dashboard locally
 
