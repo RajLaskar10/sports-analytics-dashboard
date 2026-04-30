@@ -2,29 +2,28 @@
 
 A football analytics pipeline that ingests StatsBomb event-level data for the 2018 FIFA World Cup, loads it into a normalized Supabase schema, computes KPIs via SQL views, and surfaces them in an interactive Streamlit dashboard.
 
-> **Live demo**: *(add Streamlit Cloud URL after deployment)*
+## Dashboard
 
-## Why Event-Level Data?
+Four tabs covering the full tournament:
 
-Most football stats you see online are box-score aggregates — goals, assists, possession percentage. StatsBomb event data is different: every pass, shot, carry, dribble, tackle, and press is a separate record with x/y coordinates on the pitch. This makes it possible to calculate things like expected goals (xG), pressing intensity, progressive passes, and shot maps — the kind of analysis you'd see from professional football analytics teams.
+| Tab | What it shows |
+|-----|--------------|
+| 🏆 Tournament Overview | xG vs actual goals per team, match-by-match xG table |
+| 🎯 Player Shooting | xG vs goals scatter, top-10 shooters by xG, team filter |
+| 🎯 Player Passing | Completion rate, through balls, switches leaderboards |
+| ⚡ Pressing | Pressing intensity and success rate by team |
 
 ## Dataset
 
-This project uses [StatsBomb open data](https://github.com/statsbomb/open-data), which is free for non-commercial use. The open dataset covers several competitions including:
+64 matches · 227,849 events · 1,706 shots · 62,881 passes · 603 players
 
-- **2018 FIFA World Cup** (used in this project)
-- La Liga (multiple seasons)
-- FA Women's Super League
-- UEFA Euro 2020
-- And others
-
-No API key is required. The data is served as JSON files from the StatsBomb GitHub repository.
+Uses [StatsBomb open data](https://github.com/statsbomb/open-data) — free for non-commercial use, no API key required. Data is served as JSON from the StatsBomb GitHub repository.
 
 ## Tech Stack
 
 | Component       | Technology           |
 |----------------|----------------------|
-| Language        | Python 3.11          |
+| Language        | Python 3.10+         |
 | Data Processing | Pandas, NumPy        |
 | HTTP Client     | Requests             |
 | Database        | Supabase (PostgreSQL)|
@@ -50,10 +49,6 @@ sports-analytics-dashboard/
 ├── streamlit_app.py                # Interactive dashboard (4 tabs)
 ├── powerbi/
 │   └── setup.md                    # Power BI connection instructions
-├── docs/
-│   ├── data-model.md               # Schema explanation and entity relationships
-│   ├── kpi-definitions.md          # What each KPI means and how it's calculated
-│   └── statsbomb-guide.md          # Quick guide to working with StatsBomb data
 ├── .streamlit/
 │   └── secrets.toml.example        # Credentials template for local dev
 ├── requirements.txt
@@ -72,44 +67,28 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Fill in your Supabase connection details in `.env` (see step 4).
+Fill in your Supabase connection details in `.env` (see `.env.example`). If your password contains special characters (e.g. `@`, `#`), that's fine — the loader and dashboard both handle them correctly.
 
-### 2. Ingest data from StatsBomb
-
-```bash
-python pipeline/ingest.py
-```
-
-Downloads all 2018 World Cup match, event, and lineup JSON files into `data/raw/`. Files that already exist are skipped, so re-running is safe.
-
-### 3. Transform JSON into CSVs
+### 2. Run the pipeline
 
 ```bash
-python pipeline/transform.py
+python pipeline/ingest.py       # downloads JSON to data/raw/ (~130 MB, skips existing)
+python pipeline/transform.py    # flattens into data/processed/ CSVs
+python pipeline/load.py         # truncates and reloads all Supabase tables
 ```
 
-Flattens the nested StatsBomb JSON into six tabular CSVs in `data/processed/`: matches, events, shots, passes, players, and lineups.
+`load.py` always truncates before inserting, so re-running any step is safe.
 
-### 4. Set up Supabase
+### 3. Apply the database schema and views
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Go to **Project Settings → Database** and note your connection parameters.
-3. Open the **SQL Editor** and run `db/schema.sql` to create the tables.
-4. Fill in `.env` with your Supabase credentials (see `.env.example`).
+In your Supabase **SQL Editor**, run in order:
 
-### 5. Load data into Supabase
+1. `db/schema.sql` — creates the six tables and indexes
+2. `db/views.sql` — creates the five KPI views
 
-```bash
-python pipeline/load.py
-```
+> **Tip**: If you have the [Supabase MCP server](https://supabase.com/docs/guides/getting-started/mcp) configured, you can apply these as migrations directly from your editor without touching the Supabase UI.
 
-Truncates all tables and bulk-inserts from the CSVs. Safe to re-run.
-
-### 6. Create KPI views
-
-In the Supabase **SQL Editor**, run `db/views.sql`.
-
-### 7. Run the Streamlit dashboard locally
+### 4. Run the Streamlit dashboard locally
 
 ```bash
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
@@ -117,16 +96,25 @@ cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 streamlit run streamlit_app.py
 ```
 
-### 8. Connect Power BI (optional)
+Open [http://localhost:8501](http://localhost:8501).
 
-See [powerbi/setup.md](powerbi/setup.md) for instructions on connecting Power BI Desktop to the Supabase views.
+### 5. Connect Power BI (optional)
+
+See [powerbi/setup.md](powerbi/setup.md) for instructions on connecting Power BI Desktop to the Supabase KPI views.
 
 ## Design Decisions
 
-- **Separate shots and passes tables** rather than one flat events table. Shot-specific columns (xG, technique) and pass-specific columns (length, angle, through ball) would be mostly NULL in a single table. Separate tables are cleaner and make the SQL views simpler. See [docs/data-model.md](docs/data-model.md).
+**Separate shots and passes tables** — Shot-specific columns (xG, technique) and pass-specific columns (length, angle, through ball) would be mostly NULL in a single flat events table. The `shots` and `passes` tables each share `event_id` as a PK/FK with `events`, keeping the schema clean without wide NULL-heavy rows.
 
-- **SQL views as the KPI layer**. All analytics logic lives in SQL views, not in Python or DAX. This means the KPIs are version-controlled and reusable across any BI tool. Both Streamlit and Power BI connect to the views, not the raw tables. See [docs/kpi-definitions.md](docs/kpi-definitions.md).
+**SQL views as the KPI layer** — All analytics logic lives in `db/views.sql`, not in Python or DAX. KPIs are version-controlled and reusable across Streamlit, Power BI, or any other tool. Neither the dashboard nor Power BI queries raw tables directly.
 
-- **Approximate "per 90" stats**. StatsBomb open data doesn't include player minutes, so per-90 stats are approximated using match count × 90. This is noted wherever it applies.
+**Approximate "per 90" stats** — StatsBomb open data doesn't include player minutes, so per-match rates are used as a proxy. This is noted wherever it applies.
 
-- **Pressing success is estimated**. A pressure is counted as successful if a Ball Recovery by the same team follows within 5 events. This is a rough proxy — the real metric would need tracking data. See [docs/kpi-definitions.md](docs/kpi-definitions.md).
+**Pressing success is estimated** — A pressure is counted as successful if the same team records a Ball Recovery within 5 events. This is a rough proxy — real pressing metrics require tracking data.
+
+## Key Caveats
+
+- A **completed pass** has `pass_outcome IS NULL` in StatsBomb data; an incomplete pass has a named outcome
+- **Progressive passes** (`pass_length > 25`) is a rough proxy — it includes long sideways passes
+- **xG** values are StatsBomb's pre-computed `statsbomb_xg` field — not comparable to xG from other providers
+- **StatsBomb coordinate system**: origin = top-left, x = 0–120 (length), y = 0–80 (width)
