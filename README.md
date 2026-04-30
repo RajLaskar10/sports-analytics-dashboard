@@ -2,6 +2,8 @@
 
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://sports-analytics-dashboard-lhyr8atch7cbxlybzdjxyb.streamlit.app/)
 
+![Dashboard Preview](docs/dashboard-preview.png)
+
 A football analytics pipeline that ingests StatsBomb event-level data for the 2018 FIFA World Cup, loads it into a normalized Supabase schema, computes KPIs via SQL views, and surfaces them in an interactive Streamlit dashboard.
 
 ## Dashboard
