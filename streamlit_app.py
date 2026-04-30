@@ -31,7 +31,10 @@ def _get_engine():
         user = os.environ.get("DB_USER", "postgres")
         password = os.environ.get("DB_PASSWORD", "")
 
-    url = f"postgresql+psycopg2://{user}:{quote_plus(password)}@{host}:{port}/{database}?sslmode=require"
+    # port 6543 = Supabase transaction pooler (used on Streamlit Cloud)
+    # port 5432 = direct connection (used locally)
+    sslmode = "prefer" if int(port) == 6543 else "require"
+    url = f"postgresql+psycopg2://{user}:{quote_plus(password)}@{host}:{port}/{database}?sslmode={sslmode}"
     return create_engine(url, pool_pre_ping=True)
 
 
