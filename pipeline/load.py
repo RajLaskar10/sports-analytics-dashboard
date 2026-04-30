@@ -1,18 +1,23 @@
 # Note: After loading data, run db/views.sql separately to create the KPI views.
 
 """
-Loads processed CSVs into PostgreSQL.
+Loads processed CSVs into Supabase (PostgreSQL).
 
 Reads all six CSVs from data/processed/, truncates the target tables,
 bulk-inserts using psycopg2 execute_values, and runs ANALYZE on each table.
 
 DB connection config is read from environment variables (see .env.example).
+Copy .env.example to .env and fill in your Supabase connection details.
 """
 
 import os
+import numpy as np
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
@@ -62,14 +67,31 @@ TABLES = [
 
 
 def get_connection():
-    """Create a PostgreSQL connection using environment variables."""
+    """Create a Supabase (PostgreSQL) connection using environment variables."""
     return psycopg2.connect(
         host=os.environ.get("DB_HOST", "localhost"),
         port=os.environ.get("DB_PORT", "5432"),
-        dbname=os.environ.get("DB_NAME", "sports_analytics"),
+        dbname=os.environ.get("DB_NAME", "postgres"),
         user=os.environ.get("DB_USER", "postgres"),
         password=os.environ.get("DB_PASSWORD", ""),
+        sslmode="require",
     )
+
+
+def _to_python(val):
+    """Convert numpy scalars and NaN to Python-native types for psycopg2."""
+    try:
+        if pd.isna(val):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(val, np.integer):
+        return int(val)
+    if isinstance(val, np.floating):
+        return float(val)
+    if isinstance(val, np.bool_):
+        return bool(val)
+    return val
 
 
 def load_table(cursor, table_config):
@@ -80,9 +102,6 @@ def load_table(cursor, table_config):
 
     df = pd.read_csv(csv_path)
 
-    # Replace NaN with None for proper SQL NULL handling
-    df = df.where(pd.notna(df), None)
-
     # Truncate before loading so re-running is safe
     cursor.execute(f"TRUNCATE TABLE {name} CASCADE;")
 
@@ -90,12 +109,12 @@ def load_table(cursor, table_config):
         print(f"  {name}: 0 rows (empty CSV)")
         return
 
-    # Build tuples for execute_values
+    # Build tuples for execute_values, converting numpy types and NaN → None
     col_list = ", ".join(columns)
     template = "(" + ", ".join(["%s"] * len(columns)) + ")"
     insert_sql = f"INSERT INTO {name} ({col_list}) VALUES %s"
 
-    rows = [tuple(row[col] for col in columns) for _, row in df.iterrows()]
+    rows = [tuple(_to_python(row[col]) for col in columns) for _, row in df.iterrows()]
     execute_values(cursor, insert_sql, rows, template=template, page_size=1000)
     print(f"  {name}: {len(rows)} rows inserted")
 

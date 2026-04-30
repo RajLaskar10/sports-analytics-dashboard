@@ -1,14 +1,16 @@
 # Power BI Dashboard Setup
 
-How to connect Power BI Desktop to the PostgreSQL database and build the four-page dashboard.
+How to connect Power BI Desktop to the Supabase database and build the four-page dashboard.
 
-## Connecting to PostgreSQL
+## Connecting to Supabase
+
+Power BI connects to Supabase the same way it connects to any PostgreSQL database — just use your Supabase host and credentials.
 
 1. Open Power BI Desktop
 2. Click **Get Data** → **Database** → **PostgreSQL database**
 3. Enter your server details:
-   - Server: `localhost` (or your DB host)
-   - Database: `sports_analytics`
+   - Server: `db.<your-project-ref>.supabase.co`
+   - Database: `postgres`
 4. Enter your credentials (same as in `.env`)
 5. In the Navigator, select the **views** — not the raw tables:
    - `player_shooting_stats`

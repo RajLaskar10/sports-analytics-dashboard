@@ -2,3 +2,7 @@ pandas
 psycopg2-binary
 requests
 numpy
+python-dotenv
+streamlit
+plotly
+sqlalchemy
