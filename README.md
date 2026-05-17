@@ -1,6 +1,6 @@
 # Sports Analytics Dashboard
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://sports-analytics-dashboard-lhyr8atch7cbxlybzdjxyb.streamlit.app/)
+
 
 ![Dashboard Preview](docs/dashboard-preview.png)
 
